@@ -15,7 +15,7 @@ int main(){
         exit(EXIT_FAILURE);
     }
 
-    // Thiết lập địa chỉ và cổng cho server socket  
+    // Thiết lập địa chỉ và cổng cho server socket
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_port = htons(8080);
@@ -40,7 +40,7 @@ int main(){
     if (client_socket == -1) {
         perror("accept");
         close(listener);
-        exit(EXIT_FAILURE); 
+        exit(EXIT_FAILURE);
     }
     printf("Client connected!: %d\n", client_socket);
 
@@ -51,10 +51,10 @@ int main(){
         perror("recv");
         close(client_socket);
         close(listener);
-        exit(EXIT_FAILURE); 
+        exit(EXIT_FAILURE);
     }
 
-    // Xử lý dữ liệu nhận được 
+    // Xử lý dữ liệu nhận được
     buffer[bytes_received] = '\0'; // Null-terminate the received data
     printf("Received: %s\n", buffer);
     // Gửi dữ liệu phản hồi lại cho client

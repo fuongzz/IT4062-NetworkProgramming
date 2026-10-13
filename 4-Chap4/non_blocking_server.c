@@ -1,116 +1,89 @@
 #include <stdio.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#include <netdb.h>
+#include <stdlib.h>
 #include <string.h>
-#include <errno.h>
+#include <unistd.h>
 #include <arpa/inet.h>
+#include <sys/socket.h>
 #include <sys/ioctl.h>
 
-void remove_client(int *clients, int *num_clients, int index)
-{
-    // Close the client socket
-    close(clients[index]);
+#define MAX_CLIENTS 10
+int io_mode = 1;
 
-    // Shift the remaining clients in the array
-    for (int i = index; i < (*num_clients) - 1; i++)
-    {
-        clients[i] = clients[i + 1];
-    }
-    (*num_clients)--;
-}
+int main(){
+    int listener = socket(
+        AF_INET, 
+        SOCK_STREAM,
+        IPPROTO_TCP
+    );
 
-int main()
-{
-    // Create a TCP Socket
-    int listener_socket = socket(AF_INET, SOCK_STREAM, 0);
-    if (listener_socket == -1)
-    {
-        perror("socket");
-        return 1;   
-    }
-
-    // Set the socket to non-blocking mode
-    unsigned long mode = 1; // 1 to enable non-blocking mode
-    if (ioctl(listener_socket, FIONBIO, &mode) == -1)
-    {
-        perror("ioctl");
-        close(listener_socket);
-        return 1;   
-    }   
-
-    // define the server address
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(9000);
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port = htons(8080);
+    addr.sin_addr.s_addr = INADDR_ANY;
 
-    // bind the socket to the address
-    if (bind(listener_socket, (struct sockaddr *)&addr, sizeof(addr)) == -1)
-    {
-        perror("bind");
-        close(listener_socket);
-        return 1;       
+    int opt = 1;
+    setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+    if (bind(
+            listener, 
+            (struct sockaddr*)&addr, 
+            sizeof(addr)
+        ) == -1
+    ){
+        perror("bind() failed");
+        return 1;
     }
 
-    if (listen(listener_socket, 5) == -1)
-    {
-        perror("listen");
-        close(listener_socket);
-        return 1;       
+    if (listen(listener, 5) == -1){
+        perror("listen() failed");
+        return 1;
     }
 
-    int clients[50];
+    char buffer[1024] = {0};
+    int current_client = 0;
+    int client_sockets[MAX_CLIENTS] = {0};
     int num_clients = 0;
-    char buffer[1024];
 
-    while (1)
-    {
-        // Accept new connections
-        int client_socket = accept(listener_socket, NULL, NULL);
-        if (client_socket == -1)
-        {
-            if (errno != EWOULDBLOCK){
-                printf("Accept() failed");
-            }else {
-                // Add the new client socket to the clients array
+    ioctl(listener, FIONBIO, &io_mode);
+
+    while (0 == 0){
+        int client = accept(
+            listener, 
+            NULL, 
+            NULL
+        );
+
+        if (client == -1){
+            // No new client, continue to check existing clients
+        } else {
+            if (num_clients < MAX_CLIENTS) {
+                client_sockets[num_clients++] = client;
+                ioctl(client, FIONBIO, &io_mode);
+                printf("New client connected: %d\n", client);
+            } else {
+                printf("Max clients reached. Rejecting new connection.\n");
+                close(client);
             }
-        }else{
-            // If a new client is accepted, add it to the clients array
-            printf("New client connected: %d\n", client_socket);
-            clients[num_clients++] = client_socket;
-            mode = 1;
-            ioctl(client_socket, FIONBIO, &mode);
         }
 
-        // Check for incoming data from connected clients
-        for (int i = 0; i < num_clients; i++)
-        {
-            int ret = recv(clients[i], buffer, sizeof(buffer) - 1, 0);
-            if (ret == -1)
-            {
-                if (errno != EWOULDBLOCK)
-                {
-                    printf("recv() failed for client %d\n", clients[i]);    
-                    close(clients[i]);
-                    remove_client(clients, &num_clients, i);
-                    continue; // Skip to the next client
-                } else {
-                    // If data is received, print it
-                } 
-            }else if (ret == 0){
-                printf("Client %d disconnected\n", clients[i]);
-                close(clients[i]);
-                remove_client(clients, &num_clients, i);
-                continue; // Skip to the next client
-            } else{
-                buffer[ret] = '\0';
-                send(clients[i], buffer, ret, 0); // Echo the received data back to the client
-                printf("Received from client %d: %s\n", clients[i], buffer);
+        for (int i = 0; i < num_clients; i++){
+            int byte_received = recv(
+                client_sockets[i], 
+                buffer, 
+                sizeof(buffer), 
+                0
+            );
+            if (byte_received > 0){
+                printf("Received %d bytes from client %d: %s\n", byte_received, client_sockets[i], buffer);
+                char message[] = "Hello from server!\r\n";
+                send(client_sockets[i], message, strlen(message), 0);
+            } else if (byte_received == 0) {
+                printf("Client %d disconnected.\n", client_sockets[i]);
+                close(client_sockets[i]);
+            } else if (byte_received == -1) {
+                continue; // No data received, continue to next client
             }
         }
     }
-    close(listener_socket);
-    return 0;  
+
 }

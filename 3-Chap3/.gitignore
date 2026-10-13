@@ -16,3 +16,8 @@ tcp_client
 tcp_server
 udp_sender
 udp_receiver
+exercise2
+telnet_server
+telnet_client
+music_server
+music_client
